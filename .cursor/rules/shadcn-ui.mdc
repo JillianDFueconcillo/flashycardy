@@ -1,0 +1,39 @@
+---
+alwaysApply: true
+---
+# ShadCN UI Usage
+
+This project uses **shadcn/ui** for all UI elements. Always prefer shadcn components over raw HTML elements or other UI libraries.
+
+## Initialization
+
+If shadcn is not yet initialized in the project, run:
+
+```bash
+npx shadcn@latest init
+```
+
+## Adding Components
+
+If a particular shadcn component is not yet installed, add it using:
+
+```bash
+npx shadcn@latest add <component-name>
+```
+
+### Examples
+
+```bash
+npx shadcn@latest add button
+npx shadcn@latest add input
+npx shadcn@latest add card
+npx shadcn@latest add dialog
+```
+
+## Guidelines
+
+- **Always** use shadcn components for UI elements (buttons, inputs, cards, dialogs, etc.)
+- Components are located in `components/ui/` after installation
+- Import components from `@/components/ui/<component-name>`
+- Do **not** install or use other UI libraries (e.g. Material UI, Chakra UI) unless explicitly requested
+- If a needed component doesn't exist in shadcn, build it using existing shadcn primitives and Tailwind CSS

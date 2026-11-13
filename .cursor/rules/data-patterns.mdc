@@ -1,0 +1,137 @@
+---
+alwaysApply: true
+---
+
+# Data Access & Mutation Patterns
+
+## Data Retrieval — Server Components Only
+
+All data fetching must be performed in **Server Components**. Never fetch data in Client Components directly.
+
+```tsx
+// ✅ Correct — fetch in a Server Component
+export default async function DecksPage() {
+  const { userId } = await auth();
+  const userDecks = await db.select().from(decks).where(eq(decks.userId, userId));
+  return <DeckList decks={userDecks} />;
+}
+
+// ❌ Wrong — do not fetch data in a Client Component
+"use client";
+export function DeckList() {
+  const [decks, setDecks] = useState([]);
+  useEffect(() => { fetch("/api/decks").then(...) }, []); // ← never do this
+}
+```
+
+## Database Interactions — Drizzle ORM Required
+
+All database interactions **must** use Drizzle ORM with the defined schema. Never write raw SQL, use another ORM, or call the database client directly.
+
+### Database Client
+
+Always import the shared `db` instance:
+
+```ts
+import { db } from "@/db";
+```
+
+### Schema
+
+Always import tables from the schema file — never define inline table references:
+
+```ts
+import { decks, cards } from "@/db/schema";
+```
+
+**Available tables:**
+- **`decks`** — `id`, `userId`, `title`, `description`, `createdAt`, `updatedAt`
+- **`cards`** — `id`, `deckId`, `front`, `back`, `createdAt`, `updatedAt`
+
+### Query Patterns
+
+```ts
+import { eq, and } from "drizzle-orm";
+
+// SELECT
+const userDecks = await db.select().from(decks).where(eq(decks.userId, userId));
+
+// INSERT
+const [newDeck] = await db.insert(decks).values({ userId, title, description }).returning();
+
+// UPDATE
+await db.update(decks).set({ title, updatedAt: new Date() }).where(and(eq(decks.id, id), eq(decks.userId, userId)));
+
+// DELETE
+await db.delete(cards).where(eq(cards.id, cardId));
+```
+
+**Rules:**
+- **Never** use raw SQL (`sql` template literals or the `neon()` client directly)
+- **Never** use `prisma`, `typeorm`, `sequelize`, or any other ORM
+- **Always** scope `decks` queries by `userId` to enforce ownership
+- **Always** use `.returning()` after `insert` or `update` when you need the resulting row
+- **Always** add new tables/columns to `src/db/schema.ts` and run a migration — never alter the DB outside of schema changes
+
+---
+
+## Data Mutations — Server Actions Only
+
+All **inserts**, **updates**, and **deletes** must be performed via **Server Actions**. Never mutate data through API route handlers or client-side code.
+
+```ts
+// ✅ Correct — mutation in a Server Action
+"use server";
+export async function createDeck(input: CreateDeckInput) { ... }
+
+// ❌ Wrong — do not mutate data in a route handler or client component
+export async function POST(req: Request) {
+  const body = await req.json();
+  await db.insert(decks).values(body); // ← use a Server Action instead
+}
+```
+
+## Data Validation — Zod Required
+
+Every piece of data passed into a Server Action **must** be validated with **Zod** before any database interaction.
+
+- Define a Zod schema for each action's input.
+- Derive the TypeScript type from the schema using `z.infer<>`.
+- **Never** use `FormData` as a parameter type for Server Actions.
+
+```ts
+// ✅ Correct
+import { z } from "zod";
+
+const createDeckSchema = z.object({
+  title: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+});
+
+type CreateDeckInput = z.infer<typeof createDeckSchema>;
+
+export async function createDeck(input: CreateDeckInput) {
+  const parsed = createDeckSchema.safeParse(input);
+  if (!parsed.success) throw new Error("Invalid input");
+  // proceed with db mutation ...
+}
+
+// ❌ Wrong — FormData type and no validation
+export async function createDeck(formData: FormData) { ... }
+
+// ❌ Wrong — unvalidated plain object
+export async function createDeck(input: { title: string }) { ... }
+```
+
+## Summary Checklist
+
+- [ ] Data is fetched only in Server Components
+- [ ] Mutations (insert / update / delete) live in Server Actions marked with `"use server"`
+- [ ] Every Server Action input has a Zod schema
+- [ ] The TypeScript type is derived via `z.infer<typeof schema>`
+- [ ] `FormData` is **never** used as a Server Action parameter type
+- [ ] All DB access uses `db` from `@/db` and tables from `@/db/schema`
+- [ ] No raw SQL, no other ORMs, no direct DB client calls
+- [ ] `decks` queries are always scoped by `userId`
+- [ ] `.returning()` is used after `insert`/`update` when the row is needed
+- [ ] New tables/columns are added to `src/db/schema.ts` with a migration

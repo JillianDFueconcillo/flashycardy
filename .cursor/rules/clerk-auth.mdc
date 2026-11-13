@@ -1,0 +1,76 @@
+---
+alwaysApply: true
+---
+
+# Authentication & Data Authorization with Clerk
+
+All authentication in this project is handled by **Clerk**. Every data access must be scoped to the authenticated user — never expose or mutate another user's data.
+
+## Getting the Current User
+
+In **Server Components, Route Handlers, and Server Actions**, use `auth()` from Clerk:
+
+```ts
+import { auth } from "@clerk/nextjs/server";
+
+const { userId } = await auth();
+if (!userId) throw new Error("Unauthorized");
+```
+
+In **Client Components**, use the `useAuth` or `useUser` hook:
+
+```ts
+import { useAuth } from "@clerk/nextjs";
+
+const { userId } = useAuth();
+```
+
+## Data Access Rules
+
+- **Always** retrieve `userId` from Clerk before any DB query that reads or mutates user-owned data.
+- **Always** filter queries by `userId` to ensure a user cannot read another user's records:
+
+```ts
+// ✅ Correct — scoped to the authenticated user
+const userDecks = await db.select().from(decks).where(eq(decks.userId, userId));
+
+// ❌ Wrong — returns all rows regardless of owner
+const allDecks = await db.select().from(decks);
+```
+
+- **Always** verify ownership before updating or deleting a resource:
+
+```ts
+// ✅ Correct — ownership check on update/delete
+await db
+  .update(decks)
+  .set({ title })
+  .where(and(eq(decks.id, deckId), eq(decks.userId, userId)));
+```
+
+- **Never** accept a `userId` from the client (request body, query params, etc.). Always derive it server-side from `auth()`.
+
+## Route & Middleware Protection
+
+- The Clerk `middleware.ts` at the project root must protect all authenticated routes.
+- Any route or API handler that accesses user data must call `auth()` and handle the `null` case by returning a `401` or redirecting to sign-in.
+
+```ts
+// app/api/decks/route.ts
+import { auth } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // safe to query — scoped by userId
+}
+```
+
+## Summary Checklist
+
+- [ ] `userId` comes from `auth()` (server) or `useAuth()` (client) — never from user input
+- [ ] All DB reads are filtered by `userId`
+- [ ] All DB writes include an ownership condition (`eq(table.userId, userId)`)
+- [ ] Unauthenticated requests are rejected before touching the database

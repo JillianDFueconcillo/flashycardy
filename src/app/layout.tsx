@@ -1,15 +1,15 @@
+import { ClerkProvider, SignInButton, SignUpButton, Show, UserButton } from "@clerk/nextjs";
+import { dark } from "@clerk/themes";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Poppins } from "next/font/google";
+import { Suspense } from "react";
+import { Button } from "@/components/ui/button";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const poppins = Poppins({
+  variable: "--font-poppins",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -21,9 +21,31 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${poppins.variable} dark h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        <ClerkProvider appearance={{ baseTheme: dark }}>
+          <header className="flex items-center justify-between px-6 py-3 border-b border-border">
+            <span className="font-semibold text-lg">FlashyCardy</span>
+            <Suspense>
+              <Show when="signed-out">
+                <div className="flex gap-2">
+                  <SignInButton mode="modal">
+                    <Button variant="outline">Sign In</Button>
+                  </SignInButton>
+                  <SignUpButton mode="modal">
+                    <Button>Sign Up</Button>
+                  </SignUpButton>
+                </div>
+              </Show>
+              <Show when="signed-in">
+                <UserButton />
+              </Show>
+            </Suspense>
+          </header>
+          {children}
+        </ClerkProvider>
+      </body>
     </html>
   );
 }

@@ -1,0 +1,56 @@
+---
+alwaysApply: true
+---
+
+# Database Interactions with Drizzle ORM
+
+All database interactions in this project **must** use Drizzle ORM with the defined schema. Never write raw SQL strings, use other ORMs, or access the database directly.
+
+## Database Client
+
+Import the shared `db` instance from [src/db/index.ts](mdc:src/db/index.ts):
+
+```ts
+import { db } from "@/db";
+```
+
+## Schema
+
+Always import tables from [src/db/schema.ts](mdc:src/db/schema.ts):
+
+```ts
+import { decks, cards } from "@/db/schema";
+```
+
+### Available Tables
+
+- **`decks`** — belongs to a Clerk user (`userId`). Fields: `id`, `userId`, `title`, `description`, `createdAt`, `updatedAt`
+- **`cards`** — belongs to a deck (`deckId`, cascade-deleted). Fields: `id`, `deckId`, `front`, `back`, `createdAt`, `updatedAt`
+
+## Query Patterns
+
+Use Drizzle's query builder for all CRUD operations:
+
+```ts
+import { eq, and } from "drizzle-orm";
+
+// SELECT
+const userDecks = await db.select().from(decks).where(eq(decks.userId, userId));
+
+// INSERT
+const [newDeck] = await db.insert(decks).values({ userId, title, description }).returning();
+
+// UPDATE
+await db.update(decks).set({ title, updatedAt: new Date() }).where(and(eq(decks.id, id), eq(decks.userId, userId)));
+
+// DELETE
+await db.delete(cards).where(eq(cards.id, cardId));
+```
+
+## Rules
+
+- **Never** use raw SQL (`sql` template literals or `neon()` directly) for queries
+- **Never** use `prisma`, `typeorm`, `sequelize`, or any other ORM
+- **Always** scope deck queries by `userId` (from Clerk) to enforce ownership
+- **Always** use `.returning()` after `insert` or `update` when you need the resulting row
+- **Always** add new tables/columns to [src/db/schema.ts](mdc:src/db/schema.ts) and run a migration — never alter the DB outside of schema changes
